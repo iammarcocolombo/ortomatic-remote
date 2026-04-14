@@ -31,7 +31,7 @@
             text-align: center;
             margin-bottom: 25px;
             font-weight: bold;
-            color: #FFA500; /* Arancione per "In connessione" */
+            color: #FFA500;
         }
         .form-group { margin-bottom: 20px; }
         label { 
@@ -86,40 +86,41 @@
         
         <div id="toast" class="toast">Configurazione Inviata all'Orto!</div>
         
-        <!-- Non è più un vero <form action="...">, ci pensa Javascript! -->
         <div id="configForm">
             <div class="form-group">
                 <label for="buio">Soglia Buio (Raw):</label>
-                <input type="number" id="buio" value="120" required>
+                <!-- Lasciamo un valore fittizio, verrà sovrascritto in pochi millisecondi -->
+                <input type="number" id="buio" value="..." required>
             </div>
             <div class="form-group">
                 <label for="penombra">Soglia Penombra (Raw):</label>
-                <input type="number" id="penombra" value="500" required>
+                <input type="number" id="penombra" value="..." required>
             </div>
             <div class="form-group">
                 <label for="intervallo">Intervallo Lettura Sensori (ms):</label>
-                <input type="number" id="intervallo" value="10000" required>
+                <input type="number" id="intervallo" value="..." required>
             </div>
             <div class="form-group">
                 <label for="aria">Sensore Terra - Valore Aria (Secco):</label>
-                <input type="number" id="aria" value="3000" required>
+                <input type="number" id="aria" value="..." required>
             </div>
             <div class="form-group">
                 <label for="acqua">Sensore Terra - Valore Acqua (Saturo):</label>
-                <input type="number" id="acqua" value="1200" required>
+                <input type="number" id="acqua" value="..." required>
             </div>
             
             <button id="btnSalva" onclick="inviaConfigurazione()" disabled>💾 Invia Configurazione</button>
         </div>
 
-        <div class="footer">Sviluppato da MarCol.ino | Architettura IoT MQTT</div>
+        <div class="footer">Sviluppato da MarCol.ino | Architettura IoT Bidirezionale MQTT</div>
     </div>
 
     <script>
-       // Configurazione del Broker MQTT Pubblico
+        // Configurazione del Broker MQTT Pubblico
         const broker = "broker.hivemq.com";
-        const port = 8884; // <-- CAMBIA DA 8000 A 8884 (Porta sicura WSS)
-        const topic = "ortomatic/marco/config";
+        const port = 8884; // Porta sicura WSS (per GitHub Pages HTTPS)
+        const topicCommand = "ortomatic/marco/config"; // Dove scriviamo
+        const topicStatus = "ortomatic/marco/status";  // Da dove ascoltiamo i dati dell'ESP32
         
         // Creazione client MQTT (ID casuale per evitare conflitti)
         const clientId = "WebClient-" + Math.floor(Math.random() * 10000);
@@ -127,11 +128,12 @@
 
         // Gestori Eventi
         client.onConnectionLost = onConnectionLost;
+        client.onMessageArrived = onMessageArrived; // <- ABILITIAMO L'ASCOLTO DEI DATI!
 
         // Opzioni di connessione
         const options = {
             timeout: 3,
-            useSSL: true,      // <-- AGGIUNGI QUESTA RIGA (Fondamentale per HTTPS!)
+            useSSL: true, // Fondamentale per HTTPS!
             onSuccess: onConnect,
             onFailure: onFailure
         };
@@ -147,6 +149,27 @@
             
             // Abilita il bottone
             document.getElementById("btnSalva").disabled = false;
+
+            // Ci iscriviamo al canale di stato per ricevere i valori correnti congelati (Retained)
+            client.subscribe(topicStatus);
+        }
+
+        // --- FUNZIONE GEMELLO DIGITALE: Aggiorna l'interfaccia con i dati veri dell'ESP32 ---
+        function onMessageArrived(message) {
+            if (message.destinationName === topicStatus) {
+                console.log("Configurazione ricevuta dall'ESP32:", message.payloadString);
+                try {
+                    const data = JSON.parse(message.payloadString);
+                    // Sostituisce i "..." nei box con i veri valori correnti!
+                    if(data.buio !== undefined) document.getElementById("buio").value = data.buio;
+                    if(data.penombra !== undefined) document.getElementById("penombra").value = data.penombra;
+                    if(data.intervallo !== undefined) document.getElementById("intervallo").value = data.intervallo;
+                    if(data.aria !== undefined) document.getElementById("aria").value = data.aria;
+                    if(data.acqua !== undefined) document.getElementById("acqua").value = data.acqua;
+                } catch (e) {
+                    console.log("Errore decodifica JSON di stato");
+                }
+            }
         }
 
         function onFailure(message) {
@@ -180,9 +203,9 @@
             const payloadJSON = JSON.stringify(dati);
             console.log("Invio payload: ", payloadJSON);
 
-            // 3. Crea e invia il messaggio MQTT
+            // 3. Crea e invia il messaggio MQTT verso l'ESP32
             const message = new Paho.MQTT.Message(payloadJSON);
-            message.destinationName = topic;
+            message.destinationName = topicCommand;
             client.send(message);
 
             // 4. Mostra il feedback visivo
