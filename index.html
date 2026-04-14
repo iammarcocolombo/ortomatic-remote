@@ -116,9 +116,9 @@
     </div>
 
     <script>
-        // Configurazione del Broker MQTT Pubblico
+       // Configurazione del Broker MQTT Pubblico
         const broker = "broker.hivemq.com";
-        const port = 8000; // Porta WebSockets per Javascript
+        const port = 8884; // <-- CAMBIA DA 8000 A 8884 (Porta sicura WSS)
         const topic = "ortomatic/marco/config";
         
         // Creazione client MQTT (ID casuale per evitare conflitti)
@@ -131,6 +131,7 @@
         // Opzioni di connessione
         const options = {
             timeout: 3,
+            useSSL: true,      // <-- AGGIUNGI QUESTA RIGA (Fondamentale per HTTPS!)
             onSuccess: onConnect,
             onFailure: onFailure
         };
