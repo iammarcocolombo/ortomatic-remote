@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ortomatic - Remote Control</title>
+    <!-- Importiamo la libreria Paho MQTT per usare MQTT da Javascript (WebSockets) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #121212; 
+            color: #ffffff; 
+            padding: 20px; 
+            margin: 0;
+        }
+        .container { 
+            max-width: 500px; 
+            margin: 0 auto; 
+            background-color: #1e1e1e; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5); 
+        }
+        h1 { 
+            color: #4CAF50; 
+            text-align: center; 
+            margin-bottom: 10px;
+        }
+        .status-box {
+            text-align: center;
+            margin-bottom: 25px;
+            font-weight: bold;
+            color: #FFA500; /* Arancione per "In connessione" */
+        }
+        .form-group { margin-bottom: 20px; }
+        label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 600; 
+            color: #bbbbbb;
+        }
+        input[type="number"] { 
+            width: 100%; 
+            padding: 12px; 
+            border: 1px solid #333; 
+            border-radius: 6px; 
+            background-color: #2c2c2c; 
+            color: white; 
+            box-sizing: border-box; 
+            font-size: 16px;
+        }
+        input[type="number"]:focus { outline: none; border-color: #4CAF50; }
+        button { 
+            width: 100%; 
+            padding: 15px; 
+            background-color: #4CAF50; 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: background 0.3s; 
+            margin-top: 10px;
+        }
+        button:hover { background-color: #45a049; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        .toast { 
+            display: none; 
+            background: #4CAF50; 
+            color: white; 
+            text-align: center; 
+            padding: 15px; 
+            border-radius: 6px; 
+            margin-bottom: 25px;
+            font-weight: bold;
+        }
+        .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌿 Ortomatic Remote</h1>
+        <div id="connectionStatus" class="status-box">Connessione al Cloud in corso...</div>
+        
+        <div id="toast" class="toast">Configurazione Inviata all'Orto!</div>
+        
+        <!-- Non è più un vero <form action="...">, ci pensa Javascript! -->
+        <div id="configForm">
+            <div class="form-group">
+                <label for="buio">Soglia Buio (Raw):</label>
+                <input type="number" id="buio" value="120" required>
+            </div>
+            <div class="form-group">
+                <label for="penombra">Soglia Penombra (Raw):</label>
+                <input type="number" id="penombra" value="500" required>
+            </div>
+            <div class="form-group">
+                <label for="intervallo">Intervallo Lettura Sensori (ms):</label>
+                <input type="number" id="intervallo" value="10000" required>
+            </div>
+            <div class="form-group">
+                <label for="aria">Sensore Terra - Valore Aria (Secco):</label>
+                <input type="number" id="aria" value="3000" required>
+            </div>
+            <div class="form-group">
+                <label for="acqua">Sensore Terra - Valore Acqua (Saturo):</label>
+                <input type="number" id="acqua" value="1200" required>
+            </div>
+            
+            <button id="btnSalva" onclick="inviaConfigurazione()" disabled>💾 Invia Configurazione</button>
+        </div>
+
+        <div class="footer">Sviluppato da MarCol.ino | Architettura IoT MQTT</div>
+    </div>
+
+    <script>
+        // Configurazione del Broker MQTT Pubblico
+        const broker = "broker.hivemq.com";
+        const port = 8000; // Porta WebSockets per Javascript
+        const topic = "ortomatic/marco/config";
+        
+        // Creazione client MQTT (ID casuale per evitare conflitti)
+        const clientId = "WebClient-" + Math.floor(Math.random() * 10000);
+        const client = new Paho.MQTT.Client(broker, port, clientId);
+
+        // Gestori Eventi
+        client.onConnectionLost = onConnectionLost;
+
+        // Opzioni di connessione
+        const options = {
+            timeout: 3,
+            onSuccess: onConnect,
+            onFailure: onFailure
+        };
+
+        // Avvio connessione
+        client.connect(options);
+
+        function onConnect() {
+            console.log("Connesso al Broker MQTT!");
+            const statusDiv = document.getElementById("connectionStatus");
+            statusDiv.innerHTML = "🟢 Connesso al Cloud MQTT";
+            statusDiv.style.color = "#4CAF50";
+            
+            // Abilita il bottone
+            document.getElementById("btnSalva").disabled = false;
+        }
+
+        function onFailure(message) {
+            console.log("Connessione fallita: " + message.errorMessage);
+            const statusDiv = document.getElementById("connectionStatus");
+            statusDiv.innerHTML = "🔴 Errore di Connessione al Cloud";
+            statusDiv.style.color = "#ff4444";
+        }
+
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log("Connessione persa: " + responseObject.errorMessage);
+                const statusDiv = document.getElementById("connectionStatus");
+                statusDiv.innerHTML = "🔴 Connessione Persa. Ricarica la pagina.";
+                statusDiv.style.color = "#ff4444";
+                document.getElementById("btnSalva").disabled = true;
+            }
+        }
+
+        function inviaConfigurazione() {
+            // 1. Legge i valori dagli input HTML
+            const dati = {
+                buio: parseInt(document.getElementById("buio").value),
+                penombra: parseInt(document.getElementById("penombra").value),
+                intervallo: parseInt(document.getElementById("intervallo").value),
+                aria: parseInt(document.getElementById("aria").value),
+                acqua: parseInt(document.getElementById("acqua").value)
+            };
+
+            // 2. Converte in formato JSON
+            const payloadJSON = JSON.stringify(dati);
+            console.log("Invio payload: ", payloadJSON);
+
+            // 3. Crea e invia il messaggio MQTT
+            const message = new Paho.MQTT.Message(payloadJSON);
+            message.destinationName = topic;
+            client.send(message);
+
+            // 4. Mostra il feedback visivo
+            document.getElementById('toast').style.display = 'block';
+            setTimeout(() => { 
+                document.getElementById('toast').style.display = 'none'; 
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
