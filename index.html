@@ -100,14 +100,6 @@
                 <label for="intervallo">Intervallo Lettura Sensori (ms):</label>
                 <input type="number" id="intervallo" value="..." required>
             </div>
-            <div class="form-group">
-                <label for="aria">Sensore Terra - Valore Aria (Secco):</label>
-                <input type="number" id="aria" value="..." required>
-            </div>
-            <div class="form-group">
-                <label for="acqua">Sensore Terra - Valore Acqua (Saturo):</label>
-                <input type="number" id="acqua" value="..." required>
-            </div>
             
             <button id="btnSalva" onclick="inviaConfigurazione()" disabled>💾 Invia Configurazione</button>
         </div>
@@ -138,8 +130,15 @@
             onFailure: onFailure
         };
 
-        // Avvio connessione
-        client.connect(options);
+        // Avvio connessione con gestione sicurezza Canvas
+        try {
+            client.connect(options);
+        } catch (error) {
+            console.error("Connessione bloccata:", error);
+            const statusDiv = document.getElementById("connectionStatus");
+            statusDiv.innerHTML = "🟡 Anteprima Canvas: WebSocket bloccati. Funziona su GitHub Pages!";
+            statusDiv.style.color = "#FFD700";
+        }
 
         function onConnect() {
             console.log("Connesso al Broker MQTT!");
@@ -164,8 +163,6 @@
                     if(data.buio !== undefined) document.getElementById("buio").value = data.buio;
                     if(data.penombra !== undefined) document.getElementById("penombra").value = data.penombra;
                     if(data.intervallo !== undefined) document.getElementById("intervallo").value = data.intervallo;
-                    if(data.aria !== undefined) document.getElementById("aria").value = data.aria;
-                    if(data.acqua !== undefined) document.getElementById("acqua").value = data.acqua;
                 } catch (e) {
                     console.log("Errore decodifica JSON di stato");
                 }
@@ -194,9 +191,7 @@
             const dati = {
                 buio: parseInt(document.getElementById("buio").value),
                 penombra: parseInt(document.getElementById("penombra").value),
-                intervallo: parseInt(document.getElementById("intervallo").value),
-                aria: parseInt(document.getElementById("aria").value),
-                acqua: parseInt(document.getElementById("acqua").value)
+                intervallo: parseInt(document.getElementById("intervallo").value)
             };
 
             // 2. Converte in formato JSON
