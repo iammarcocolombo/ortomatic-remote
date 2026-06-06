@@ -3,42 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ortomatic - Remote Control</title>
+    <title>Ortomatic Cloud Dashboard</title>
     <!-- Importiamo la libreria Paho MQTT per usare MQTT da Javascript (WebSockets) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <style>
+        :root { 
+            --primary: #2ecc71; 
+            --dark-bg: #121212; 
+            --card-bg: #1e1e1e;
+            --text-light: #ffffff;
+            --text-muted: #aaaaaa;
+            --info: #3498db; 
+            --warning: #f39c12; 
+            --danger: #e74c3c;
+        }
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background-color: #121212; 
-            color: #ffffff; 
+            background-color: var(--dark-bg); 
+            color: var(--text-light); 
             padding: 20px; 
             margin: 0;
         }
         .container { 
-            max-width: 500px; 
+            max-width: 900px; 
             margin: 0 auto; 
-            background-color: #1e1e1e; 
-            padding: 30px; 
-            border-radius: 12px; 
-            box-shadow: 0 8px 16px rgba(0,0,0,0.5); 
         }
         h1 { 
-            color: #4CAF50; 
+            color: var(--primary); 
             text-align: center; 
-            margin-bottom: 10px;
+            margin-bottom: 5px;
+            font-size: 32px;
+            font-weight: 700;
         }
         .status-box {
             text-align: center;
             margin-bottom: 25px;
             font-weight: bold;
+            font-size: 14px;
+            letter-spacing: 0.5px;
             color: #FFA500;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .card { 
+            background-color: var(--card-bg); 
+            padding: 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4); 
+            border-top: 5px solid var(--primary);
+        }
+        .card-settings {
+            border-top-color: var(--info);
+        }
+        h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+            color: var(--text-light);
+        }
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #262626;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .telemetry-label {
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+        .telemetry-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-light);
+        }
+        .badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .badge-sun { background: rgba(243, 156, 18, 0.2); color: var(--warning); border: 1px solid var(--warning); }
+        .badge-ngt { background: rgba(52, 152, 219, 0.2); color: var(--info); border: 1px solid var(--info); }
+        .badge-at { background: rgba(231, 76, 60, 0.2); color: var(--danger); border: 1px solid var(--danger); }
+        
+        .progress-container {
+            width: 100%;
+            background-color: #333;
+            border-radius: 10px;
+            height: 12px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: var(--primary);
+            width: 0%;
+            transition: width 0.5s ease-in-out;
         }
         .form-group { margin-bottom: 20px; }
         label { 
             display: block; 
             margin-bottom: 8px; 
             font-weight: 600; 
-            color: #bbbbbb;
+            color: var(--text-muted);
+            font-size: 14px;
         }
         input[type="number"] { 
             width: 100%; 
@@ -49,12 +126,13 @@
             color: white; 
             box-sizing: border-box; 
             font-size: 16px;
+            transition: border-color 0.3s;
         }
-        input[type="number"]:focus { outline: none; border-color: #4CAF50; }
+        input[type="number"]:focus { outline: none; border-color: var(--info); }
         button { 
             width: 100%; 
             padding: 15px; 
-            background-color: #4CAF50; 
+            background-color: var(--info); 
             color: white; 
             border: none; 
             border-radius: 6px; 
@@ -64,11 +142,11 @@
             transition: background 0.3s; 
             margin-top: 10px;
         }
-        button:hover { background-color: #45a049; }
+        button:hover { background-color: #2980b9; }
         button:disabled { background-color: #555; cursor: not-allowed; }
         .toast { 
             display: none; 
-            background: #4CAF50; 
+            background: var(--primary); 
             color: white; 
             text-align: center; 
             padding: 15px; 
@@ -81,56 +159,88 @@
 </head>
 <body>
     <div class="container">
-        <h1>🌿 Ortomatic Remote</h1>
+        <h1>🌱 Ortomatic Cloud Portal</h1>
         <div id="connectionStatus" class="status-box">Connessione al Cloud in corso...</div>
         
         <div id="toast" class="toast">Configurazione Inviata all'Orto!</div>
         
-        <div id="configForm">
-            <div class="form-group">
-                <label for="buio">Soglia Buio (Raw):</label>
-                <!-- Lasciamo un valore fittizio, verrà sovrascritto in pochi millisecondi -->
-                <input type="number" id="buio" value="..." required>
+        <div class="grid">
+            <!-- SCHEDA TELEMETRIA IN TEMPO REALE -->
+            <div class="card">
+                <h2>📈 Telemetria Real-Time</h2>
+                
+                <div class="telemetry-row">
+                    <span class="telemetry-label">Temperatura Aria</span>
+                    <span class="telemetry-value"><span id="val_t">--</span> °C</span>
+                </div>
+                
+                <div class="telemetry-row">
+                    <span class="telemetry-label">Umidità Aria</span>
+                    <span class="telemetry-value"><span id="val_h">--</span> %</span>
+                </div>
+
+                <div class="telemetry-row" style="flex-direction: column; align-items: flex-start;">
+                    <div style="display:flex; justify-content:space-between; width:100%; margin-bottom: 5px;">
+                        <span class="telemetry-label">Umidità Terreno</span>
+                        <span class="telemetry-value" style="font-size: 18px;"><span id="val_soil">--</span> %</span>
+                    </div>
+                    <div class="progress-container">
+                        <div id="soil_bar" class="progress-bar"></div>
+                    </div>
+                </div>
+
+                <div class="telemetry-row">
+                    <span class="telemetry-label">Stato Luce</span>
+                    <span id="val_light" class="badge badge-sun">Verifica...</span>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="penombra">Soglia Penombra (Raw):</label>
-                <input type="number" id="penombra" value="..." required>
+
+            <!-- SCHEDA IMPOSTAZIONI DA REMOTO -->
+            <div class="card card-settings">
+                <h2>⚙️ Impostazioni Orto</h2>
+                <div id="configForm">
+                    <div class="form-group">
+                        <label for="buio">Soglia Buio (LDR):</label>
+                        <input type="number" id="buio" value="..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="penombra">Soglia Penombra (LDR):</label>
+                        <input type="number" id="penombra" value="..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="intervallo">Intervallo Invio Cloud (ms):</label>
+                        <input type="number" id="intervallo" value="..." required>
+                    </div>
+                    
+                    <button id="btnSalva" onclick="inviaConfigurazione()" disabled>💾 Invia Impostazioni</button>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="intervallo">Intervallo Lettura Sensori (ms):</label>
-                <input type="number" id="intervallo" value="..." required>
-            </div>
-            
-            <button id="btnSalva" onclick="inviaConfigurazione()" disabled>💾 Invia Configurazione</button>
         </div>
 
-        <div class="footer">Sviluppato da MarCol.ino | Architettura IoT Bidirezionale MQTT</div>
+        <div class="footer">Sviluppato da MarCol.ino | Architettura IoT Cloud Integrata (WSS Secure)</div>
     </div>
 
     <script>
-        // Configurazione del Broker MQTT Pubblico
         const broker = "broker.hivemq.com";
         const port = 8884; // Porta sicura WSS (per GitHub Pages HTTPS)
-        const topicCommand = "ortomatic/marco/config"; // Dove scriviamo
-        const topicStatus = "ortomatic/marco/status";  // Da dove ascoltiamo i dati dell'ESP32
+        const topicCommand = "ortomatic/marco/config"; // Topic per inviare comandi
+        const topicStatus = "ortomatic/marco/status";  // Topic per ricevere la configurazione (Retained)
+        const topicTelemetry = "ortomatic/marco/telemetry"; // Topic per ricevere la telemetria live (NEW)
         
-        // Creazione client MQTT (ID casuale per evitare conflitti)
         const clientId = "WebClient-" + Math.floor(Math.random() * 10000);
         const client = new Paho.MQTT.Client(broker, port, clientId);
 
-        // Gestori Eventi
         client.onConnectionLost = onConnectionLost;
-        client.onMessageArrived = onMessageArrived; // <- ABILITIAMO L'ASCOLTO DEI DATI!
+        client.onMessageArrived = onMessageArrived;
 
-        // Opzioni di connessione
         const options = {
             timeout: 3,
-            useSSL: true, // Fondamentale per HTTPS!
+            useSSL: true, // Obbligatorio su GitHub Pages (HTTPS)
             onSuccess: onConnect,
             onFailure: onFailure
         };
 
-        // Avvio connessione con gestione sicurezza Canvas
+        // Avvio della connessione con gestione eccezione per il Canvas
         try {
             client.connect(options);
         } catch (error) {
@@ -146,26 +256,57 @@
             statusDiv.innerHTML = "🟢 Connesso al Cloud MQTT";
             statusDiv.style.color = "#4CAF50";
             
-            // Abilita il bottone
             document.getElementById("btnSalva").disabled = false;
 
-            // Ci iscriviamo al canale di stato per ricevere i valori correnti congelati (Retained)
+            // Ci iscriviamo a entrambi i canali: Stato e Telemetria
             client.subscribe(topicStatus);
+            client.subscribe(topicTelemetry);
         }
 
-        // --- FUNZIONE GEMELLO DIGITALE: Aggiorna l'interfaccia con i dati veri dell'ESP32 ---
         function onMessageArrived(message) {
-            if (message.destinationName === topicStatus) {
-                console.log("Configurazione ricevuta dall'ESP32:", message.payloadString);
-                try {
-                    const data = JSON.parse(message.payloadString);
-                    // Sostituisce i "..." nei box con i veri valori correnti!
+            console.log("Messaggio ricevuto su [" + message.destinationName + "]: " + message.payloadString);
+            try {
+                const data = JSON.parse(message.payloadString);
+                
+                // Caso A: Aggiornamento Configurazione
+                if (message.destinationName === topicStatus) {
                     if(data.buio !== undefined) document.getElementById("buio").value = data.buio;
                     if(data.penombra !== undefined) document.getElementById("penombra").value = data.penombra;
                     if(data.intervallo !== undefined) document.getElementById("intervallo").value = data.intervallo;
-                } catch (e) {
-                    console.log("Errore decodifica JSON di stato");
                 }
+                
+                // Caso B: Aggiornamento Telemetria Real-Time
+                if (message.destinationName === topicTelemetry) {
+                    // Temperatura Aria
+                    if(data.t !== undefined) {
+                        document.getElementById("val_t").innerHTML = data.t === -99.0 ? "Errore" : data.t.toFixed(1);
+                    }
+                    // Umidità Aria
+                    if(data.h !== undefined) {
+                        document.getElementById("val_h").innerHTML = data.h === -99.0 ? "Errore" : data.h.toFixed(0);
+                    }
+                    // Umidità Terreno (Progress Bar inclusa)
+                    if(data.soil !== undefined) {
+                        document.getElementById("val_soil").innerHTML = data.soil;
+                        const bar = document.getElementById("soil_bar");
+                        bar.style.width = data.soil + "%";
+                        
+                        // Cambio colore barra in base alla sete della pianta
+                        if (data.soil <= 40) bar.style.backgroundColor = "var(--danger)";
+                        else if (data.soil <= 60) bar.style.backgroundColor = "var(--warning)";
+                        else bar.style.backgroundColor = "var(--primary)";
+                    }
+                    // Badge Stato Luce
+                    if(data.light !== undefined) {
+                        const badge = document.getElementById("val_light");
+                        badge.innerHTML = data.light;
+                        if (data.light === "SUN") badge.className = "badge badge-sun";
+                        else if (data.light === "NGT") badge.className = "badge badge-ngt";
+                        else badge.className = "badge badge-at";
+                    }
+                }
+            } catch (e) {
+                console.error("Errore decodifica JSON:", e);
             }
         }
 
@@ -187,23 +328,19 @@
         }
 
         function inviaConfigurazione() {
-            // 1. Legge i valori dagli input HTML
             const dati = {
                 buio: parseInt(document.getElementById("buio").value),
                 penombra: parseInt(document.getElementById("penombra").value),
                 intervallo: parseInt(document.getElementById("intervallo").value)
             };
 
-            // 2. Converte in formato JSON
             const payloadJSON = JSON.stringify(dati);
             console.log("Invio payload: ", payloadJSON);
 
-            // 3. Crea e invia il messaggio MQTT verso l'ESP32
             const message = new Paho.MQTT.Message(payloadJSON);
             message.destinationName = topicCommand;
             client.send(message);
 
-            // 4. Mostra il feedback visivo
             document.getElementById('toast').style.display = 'block';
             setTimeout(() => { 
                 document.getElementById('toast').style.display = 'none'; 
